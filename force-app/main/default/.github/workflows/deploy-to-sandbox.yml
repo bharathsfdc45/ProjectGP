@@ -1,0 +1,56 @@
+name: Deploy to Salesforce Sandbox
+
+on:
+  push:
+    branches:
+      - QA   # e.g. develop
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      SF_AUTH_URL: ${{ secrets.SF_AUTH_URL_QA }}
+      SF_TARGET_ALIAS: qa1   # e.g. devsandbox
+      SF_PROJECT_DIR: .                       # change if sfdx-project.json is inside a subfolder
+      SF_SOURCE_PATH: force-app               # change if your metadata lives elsewhere
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Salesforce CLI
+        run: npm install --global @salesforce/cli
+
+      - name: Verify Salesforce CLI
+        run: sf version
+
+      - name: Write auth URL to file
+        run: echo "$SF_AUTH_URL" > ./authfile.txt
+
+      - name: Authenticate to Salesforce sandbox
+        run: |
+          sf org login sfdx-url \
+            --sfdx-url-file ./authfile.txt \
+            --alias "$SF_TARGET_ALIAS" \
+            --set-default
+
+      - name: Check project folder
+        run: |
+          cd "$SF_PROJECT_DIR"
+          ls
+          test -f sfdx-project.json
+
+      - name: Deploy source to sandbox
+        run: |
+          cd "$SF_PROJECT_DIR"
+          sf project deploy start \
+            --source-dir "$SF_SOURCE_PATH" \
+            --target-org "$SF_TARGET_ALIAS" \
+            --test-level NoTestRun \
+            --wait 30
